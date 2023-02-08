@@ -1,0 +1,96 @@
+﻿<!doctype html>
+<head>
+    <style>
+        .DrawCanvas{
+            width:9999px;
+            height:9999px;
+        }
+        .h1{
+            color: orangered;
+        }
+        
+    </style>
+</head>
+<body>
+    <canvas id="DrawCanvas"></canvas>
+    <h1>Controls</h1>
+    <label for="res">LongSide Resolution</label>
+    <input type="number" id="res" name="res"
+           min="50" value="300">
+    <button type="button" onclick="ButtonFunction()">Start/Stop</button>  <button type="button" onclick="ctx.canvas.width = window.innerWidth; ctx.canvas.height = window.innerHeight;">resize</button>
+    <script>
+        var ctx = document.getElementById("DrawCanvas").getContext("2d");
+        ctx.canvas.width = window.innerWidth;
+        ctx.canvas.height = window.innerHeight;
+        function reqListener() {
+            const r = this.response;
+            var url = URL.createObjectURL(r);
+            var img = new Image;
+            img.onload = function () {
+                ctx.drawImage(img, 0, 0, window.innerWidth, window.innerHeight);
+            };
+            img.src = url;
+        }
+        window.addEventListener('keydown', this.check, false);
+
+        function check(e) {
+            e.preventDefault();
+            keyCode = e.keyCode;
+        }
+        let DownThisTick = false;
+        const canvas = document.querySelector('canvas')
+        canvas.addEventListener('mousedown', function (e) {
+            DownThisTick = true;
+            mouseChangeX = e.clientX / window.innerWidth;
+            mouseChangeY = e.clientY / window.innerHeight;
+            e.preventDefault();
+        })
+        var keyCode = -1;
+        var lastCode = -1;
+        var mouseChangeX = -1;
+        var mouseChangeY = -1;
+        function loop() {
+            let apiRequest = new XMLHttpRequest();
+            apiRequest.open('POST', window.location.href, true)
+            apiRequest.addEventListener("load", reqListener);
+            apiRequest.responseType = "blob";
+            apiRequest.setRequestHeader("key", keyCode);
+            keyCode = -1;
+            if (!(mouseChangeX < 0 || mouseChangeY < 0)) {
+                apiRequest.setRequestHeader("mousex", mouseChangeX);
+                apiRequest.setRequestHeader("mousey", mouseChangeY);
+                mouseChangeX = -1;
+                mouseChangeY = -1;
+            }
+            if (changed) {
+                apiRequest.setRequestHeader("res", resolution);
+                changed = !changed;
+            }
+            apiRequest.setRequestHeader("md", DownThisTick);
+            DownThisTick = false;
+            apiRequest.send();
+        }
+
+        var keepRun = false;
+        var intervalId = 0;
+        function ButtonFunction() {
+            keepRun = !keepRun;
+            if (keepRun) {
+                intervalId = window.setInterval(function () {
+                    loop();
+                }, 60);
+            }
+            else {
+                clearInterval(intervalId);
+            }
+        }
+        let resolution = 300;
+        let changed = false;
+        let res = document.getElementById('res');
+        res.addEventListener('input', function () {
+            changed = true;
+            resolution = res.value;
+        });;
+    </script>
+
+</body>
