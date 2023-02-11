@@ -82,13 +82,11 @@ public static class Program
     }
 
     static Size imageSize = new Size(200, 150);
+    static int downKey;
     public static byte[] Process(HttpListenerContext l, ref HttpListenerResponse r)
     {
         if (l.Request.HttpMethod == "POST")
         {
-
-
-            
             int key;
             try
             {
@@ -148,7 +146,17 @@ public static class Program
                     resized.SaveJPG100(s);
                     if (key != -1)
                     {
-                        sim.Keyboard.KeyPress((VirtualKeyCode)key);
+                        if (key != downKey)
+                        {
+                            sim.Keyboard.KeyDown((VirtualKeyCode)key);
+                            downKey = key;
+                        }
+                        else
+                        {
+                            sim.Keyboard.KeyUp((VirtualKeyCode)key);
+                            downKey = -1;
+                        }
+
                     }
                     if (MouseChange.X != -65535 && MouseChange.Y != -65535)
                     {
