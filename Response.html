@@ -1,22 +1,18 @@
 ﻿<!doctype html>
 <head>
     <style>
-        .DrawCanvas{
-            width:9999px;
-            height:9999px;
+        .DrawCanvas {
+            width: 9999px;
+            height: 9999px;
         }
-        .h1{
-            color: orangered;
-        }
-        
     </style>
 </head>
-<body>
+<body oncontextmenu="return false">
     <canvas id="DrawCanvas"></canvas>
     <h1>Controls</h1>
     <label for="res">LongSide Resolution</label>
     <input type="number" id="res" name="res"
-           min="50" value="300">
+           min="50" value="1920">
     <button type="button" onclick="ButtonFunction()">Start/Stop</button>  <button type="button" onclick="ctx.canvas.width = window.innerWidth; ctx.canvas.height = window.innerHeight;">resize</button>
     <script>
         var ctx = document.getElementById("DrawCanvas").getContext("2d");
@@ -31,20 +27,8 @@
             };
             img.src = url;
         }
-        window.addEventListener('keydown', this.check, false);
-
-        function check(e) {
-            e.preventDefault();
-            keyCode = e.keyCode;
-        }
-        let DownThisTick = false;
         const canvas = document.querySelector('canvas')
-        canvas.addEventListener('mousedown', function (e) {
-            DownThisTick = true;
-            mouseChangeX = e.clientX / window.innerWidth;
-            mouseChangeY = e.clientY / window.innerHeight;
-            e.preventDefault();
-        })
+
         var keyCode = -1;
         var lastCode = -1;
         var mouseChangeX = -1;
@@ -54,25 +38,20 @@
             apiRequest.open('POST', window.location.href, true)
             apiRequest.addEventListener("load", reqListener);
             apiRequest.responseType = "blob";
-            apiRequest.setRequestHeader("key", keyCode);
             keyCode = -1;
-            if (!(mouseChangeX < 0 || mouseChangeY < 0)) {
-                apiRequest.setRequestHeader("mousex", mouseChangeX);
-                apiRequest.setRequestHeader("mousey", mouseChangeY);
-                mouseChangeX = -1;
-                mouseChangeY = -1;
-            }
             if (changed) {
                 apiRequest.setRequestHeader("res", resolution);
                 changed = !changed;
             }
-            apiRequest.setRequestHeader("md", DownThisTick);
             DownThisTick = false;
-            apiRequest.send();
+            apiRequest.send(GetBody());
         }
-
-        var keepRun = false;
-        var intervalId = 0;
+        function GetBody() {
+            let j = JSON.stringify(events);
+            events = [];
+            return j;
+        }
+        let keepRun = false;
         function ButtonFunction() {
             keepRun = !keepRun;
             if (keepRun) {
@@ -84,13 +63,72 @@
                 clearInterval(intervalId);
             }
         }
-        let resolution = 300;
+        let resolution = 1920;
         let changed = false;
         let res = document.getElementById('res');
-        res.addEventListener('input', function () {
-            changed = true;
-            resolution = res.value;
-        });;
+        let events = []
+        document.addEventListener('keydown', function (e) {
+            e.stopImmediatePropagation();
+            e.preventDefault();
+
+            let en = {
+                type: "keydown",
+                key: e.key,
+                code: e.code,
+                keyCode: e.keyCode,
+                repeat: e.repeat
+            };
+            events.push(en);
+            return false;
+        });
+        addEventListener(
+            'beforeunload',
+            function (e) {
+                e.stopPropagation(); e.preventDefault(); return false;
+            },
+            true
+        );
+        document.addEventListener('keyup', function (e) {
+            e.stopImmediatePropagation();
+            let en = {
+                type: "keyup",
+                key: e.key,
+                code: e.code,
+                keyCode: e.keyCode,
+                repeat: e.repeat
+            };
+            events.push(en);
+            return false;
+        });
+        document.addEventListener('mousemove', function (e) {
+            let en = {
+                type: "mousemove",
+                xPer: e.x / window.innerWidth,
+                yPer: e.y / window.innerHeight,
+                movementX: e.movementX,
+                movementY: e.movementY
+            };
+            console.log(en);
+            events.push(en);
+        });
+        document.addEventListener('mousedown', function (e) {
+            let en = {
+                type: "mousedown",
+                button: e.button,
+            };
+            events.push(en);
+        });
+        document.addEventListener('mouseup', function (e) {
+            let en = {
+                type: "mouseup",
+                button: e.button,
+            };
+            events.push(en);
+        });
+    /*    Window.addEventListener('wheel', function (e) {
+            TODO
+            events.push(en);
+        });*/
     </script>
 
 </body>

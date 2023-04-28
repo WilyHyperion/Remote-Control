@@ -24,4 +24,9 @@ public static class  Helper
         return null;
     }
 
+    const int SCREEN_SIZE= 65535;
+    internal static int FracToScreen(double v)
+    {
+        return (int)(v * SCREEN_SIZE);
+    }
 }

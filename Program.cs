@@ -13,6 +13,8 @@ using WindowsInput;
 using System.Threading;
 using System.Reflection;
 using System.Runtime.CompilerServices;
+using Newtonsoft.Json;
+
 public static class Program
 {
     static InputSimulator sim = new InputSimulator();
@@ -34,22 +36,8 @@ public static class Program
         Stopwatch s = new Stopwatch();
         while (true)
         {
-            if (ServerRegulatedTick)
-            {
-                s.Start();
-            }
             HttpListenerContext context = listener.GetContext();
             Task task1 = Task.Factory.StartNew(() => Handle(context));
-
-            if (ServerRegulatedTick)
-            {
-                s.Stop();
-                TimeSpan spent = s.Elapsed;
-                if (!(spent - GOAL_TICK_TIME >= new TimeSpan(0)))
-                {
-                    Thread.Sleep(spent - GOAL_TICK_TIME);
-                }
-            }
         }
     }
     public static void Handle(HttpListenerContext context)
@@ -63,7 +51,7 @@ public static class Program
             output.Write(buffer, 0, buffer.Length);
             output.Close();
         }
-        catch (Exception ex)
+        catch 
         {
             return;
 
@@ -73,63 +61,24 @@ public static class Program
     {
         using (System.IO.Stream body = request.InputStream)
         {
-            Console.WriteLine(body.Length);
             using (var reader = new System.IO.StreamReader(body, request.ContentEncoding))
             {
                 return reader.ReadToEnd();
             }
         }
     }
-
-    static Size imageSize = new Size(200, 150);
-    static int downKey;
+    //Change default image size here, if the image is to blury and your willing to take the hit to performance
+    static Size imageSize = new Size(1920, 1080);
+    //Try to keep this ratio at 4:3 , so the screen doesn't look funky
     public static byte[] Process(HttpListenerContext l, ref HttpListenerResponse r)
     {
         if (l.Request.HttpMethod == "POST")
         {
-            int key;
-            try
-            {
-                key = Int32.Parse(l.Request.Headers["key"]);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine("Key error {0}", ex);
-                key = -1;
-            }
-            PointD MouseChange = new PointD(-65535, -65535);
-            try
-            {
-                MouseChange = new PointD(double.Parse(l.Request.Headers["mousex"]), double.Parse(l.Request.Headers["mousey"]));
-                Console.WriteLine("Mouse change {0} {1}", 65535 * MouseChange.X, 65535 * MouseChange.Y);
-            }
-            catch (Exception ex)
-            { }
-            bool md = false;
-
-            try
-            {
-                md = l.Request.Headers["md"] == "true";
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine(ex);
-            }
-            bool rd = false;
-            try
-            {
-                rd = l.Request.Headers["rd"] == "true";
-            }
-            catch (Exception ex)
-            {
-
-            }
-
             try
             {
                 int longside = Int32.Parse(l.Request.Headers["res"]);
                 imageSize = new Size(longside, ((int)(longside * 0.75f)));
-            }catch (Exception ex) { }
+            }catch { }
             {
                 Rectangle bounds = Screen.GetBounds(Point.Empty);
                 using (Bitmap bitmap = new Bitmap(bounds.Width, bounds.Height))
@@ -138,41 +87,14 @@ public static class Program
                     {
                         g.CopyFromScreen(Point.Empty, Point.Empty, bounds.Size);
                     }
-                    var body = new StreamReader(l.Request.InputStream).ReadToEnd();
+                    var body = ReadBody(l.Request);
+                    
                     r.AddHeader("height", bounds.Height.ToString());
                     r.AddHeader("width", bounds.Width.ToString());
                     Bitmap resized = (Bitmap)resizeImage(bitmap, imageSize);
                     MemoryStream s = new MemoryStream();
                     resized.SaveJPG100(s);
-                    if (key != -1)
-                    {
-                        if (key != downKey)
-                        {
-                            sim.Keyboard.KeyDown((VirtualKeyCode)key);
-                            downKey = key;
-                        }
-                        else
-                        {
-                            sim.Keyboard.KeyUp((VirtualKeyCode)key);
-                            downKey = -1;
-                        }
-
-                    }
-                    if (MouseChange.X != -65535 && MouseChange.Y != -65535)
-                    {
-                        sim.Mouse.MoveMouseTo(65535 * MouseChange.X, 65535 * MouseChange.Y);
-                    }
-                    //mouse on client is just got held down
-                    if (md)
-                    {
-                        sim.Mouse.LeftButtonClick();
-                    }
-                    //mouse on client just got moved up
-
-                    if (rd)
-                    {
-                        sim.Mouse.RightButtonClick();
-                    }
+                    HandleInput(body);
                     //sim.Keyboard.KeyPress((VirtualKeyCode)key);
                     return s.ToArray();
                     //return (byte[])converter.ConvertTo(bitmap, typeof(byte[]));
@@ -189,6 +111,61 @@ public static class Program
         return new byte[0];
 
     }
+
+    private static void HandleInput(string body)
+    {
+        var list = JsonConvert.DeserializeObject<List<Dictionary<string, string>>>(body);
+        Console.WriteLine(list);
+        ProcessEvents(list);
+    }
+
+    private static void ProcessEvents(List<Dictionary<string, string>> events)
+    {
+        foreach(Dictionary<string, string> e in events){
+            string type = e["type"];
+            switch (type)
+            {
+                case "keydown":
+                    int keydown = Int32.Parse(e["keyCode"]);
+                    sim.Keyboard.KeyDown((VirtualKeyCode)keydown);
+                    break;
+                case "keyup":
+                    int keyup = Int32.Parse(e["keyCode"]);
+                    sim.Keyboard.KeyUp((VirtualKeyCode)keyup);
+                    break;
+                case "mouseup":
+                    switch (e["button"])
+                    {
+                        case "0":
+                            sim.Mouse.LeftButtonUp();
+                            break;
+                        case "2":
+                            sim.Mouse.RightButtonUp();
+                            break;
+                    }
+                    break;
+                case "mousedown":
+                    switch (e["button"])
+                    {
+                        case "0":
+                            sim.Mouse.LeftButtonDown();
+                            break;
+                        case "2":
+                            sim.Mouse.RightButtonDown();
+                            break;
+                    }
+                    break;
+                case "mousemove":
+                    int x = Helper.FracToScreen(Double.Parse(e["xPer"]));
+                    int y = Helper.FracToScreen(Double.Parse(e["yPer"]));
+                    sim.Mouse.MoveMouseTo(x, y);
+                    break;
+
+
+            }
+        }
+    }
+
     private static string GetThisFilePath([CallerFilePath] string path = null)
     {
         return path;
